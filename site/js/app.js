@@ -255,13 +255,13 @@ function renderTable() {
   body.innerHTML = '';
 
   const revByMonth = {};
-  for (const m of meses) revByMonth[m] = (dataRegion[m] || {})['gmv_total'] || 0;
+  for (const m of meses) revByMonth[m] = (dataRegion[m] || {})['gmv_inmobiliaria'] || 0;
 
   // Líneas donde NO tiene sentido mostrar el % del GMV debajo del valor
   const PCT_EXCLUDED = new Set([
-    'properties_inmo100', 'properties_trad', 'properties_total',
-    'gmv_inmo100', 'gmv_trad', 'gmv_total', 'fee_hc100',
-    'avg_ticket', 'avg_commission', 'pct_fee_charged', 'pct_fee_paid',
+    'properties', 'gmv_inmobiliaria',
+    'avg_ticket', 'avg_commission',
+    'pct_fee_charged', 'pct_fee_paid', 'pct_cm_revenue', 'pct_cm_gmv',
   ]);
   const showPctRow = (row) => !PCT_EXCLUDED.has(row.key);
 
@@ -323,10 +323,8 @@ function openDrill(row, mes) {
   const colIdx = facts.columnas.indexOf(row.key);
   if (colIdx < 0) return;
 
-  // Base de % por-NID = c_precio (guardado como gmv_inmo100 + gmv_trad ya que
-  // cada NID pertenece a UN solo producto — la suma da su c_precio).
-  const idx100 = facts.columnas.indexOf('gmv_inmo100');
-  const idxT = facts.columnas.indexOf('gmv_trad');
+  // Base de % por-NID = precio_venta (guardado en gmv_inmobiliaria).
+  const gmvIdx = facts.columnas.indexOf('gmv_inmobiliaria');
 
   const items = [];
   const totalNids = facts.nid.length;
@@ -336,8 +334,7 @@ function openDrill(row, mes) {
     if (!matchRegion || !matchMes) continue;
     const v = facts.valores[colIdx][i];
     if (v === 0) continue;
-    const gmv = (idx100 >= 0 ? facts.valores[idx100][i] : 0)
-              + (idxT >= 0 ? facts.valores[idxT][i] : 0);
+    const gmv = gmvIdx >= 0 ? facts.valores[gmvIdx][i] : 0;
     items.push({ nid: facts.nid[i], region: facts.region[i], valor: v, gmv });
   }
 
@@ -511,8 +508,11 @@ function setupCmpControls() {
 
 // Suma los valores de las líneas del P&L para una región en un rango de meses.
 // Para líneas con signo 'ticket' o 'pct' se recalcula como promedio ponderado
-// por properties_total (evita sumar tickets/porcentajes de meses distintos).
-const AVG_KEYS = new Set(['avg_ticket', 'avg_commission', 'pct_fee_charged', 'pct_fee_paid']);
+// por properties (evita sumar tickets/porcentajes de meses distintos).
+const AVG_KEYS = new Set([
+  'avg_ticket', 'avg_commission',
+  'pct_fee_charged', 'pct_fee_paid', 'pct_cm_revenue', 'pct_cm_gmv',
+]);
 function sumRegionInRange(region, meses, vista) {
   const dataR = (state.data.vistas[vista] || {})[region] || {};
   const acc = {};
@@ -520,7 +520,7 @@ function sumRegionInRange(region, meses, vista) {
   const avgDenom = {};
   for (const m of meses) {
     const row = dataR[m] || {};
-    const nMes = row['properties_total'] || 0;
+    const nMes = row['properties'] || 0;
     for (const k of Object.keys(row)) {
       if (AVG_KEYS.has(k)) {
         avgNumer[k] = (avgNumer[k] || 0) + row[k] * nMes;
@@ -548,23 +548,21 @@ function renderCmpInsights(regionesSel, sums) {
     return;
   }
 
-  // KPIs a comparar: key, label, mode ('income' o 'cost'), normalize (siempre pct del revenue)
+  // KPIs a comparar: key, label, mode ('income' o 'cost'), normalize (siempre pct del GMV)
   const KPIS = [
-    { key: 'gross_profit', label: 'Gross Profit', mode: 'income', norm: 'pct' },
+    { key: 'revenue', label: 'Revenue', mode: 'income', norm: 'pct' },
     { key: 'brokers', label: 'Comisión Brokers', mode: 'cost', norm: 'pct' },
-    { key: 'gastos_transaccionales', label: 'Gastos Transaccionales', mode: 'cost', norm: 'pct' },
     { key: 'com_int_total', label: 'Comisiones Internas', mode: 'cost', norm: 'pct' },
-    { key: 'direct_costs', label: 'Costos Directos', mode: 'cost', norm: 'pct' },
-    { key: 'contribution_margin', label: 'Margen de Contribución', mode: 'income', norm: 'pct' },
+    { key: 'contribution_margin', label: 'Contribution Margin', mode: 'income', norm: 'pct' },
   ];
 
   // valor para comparación (respeta la métrica global salvo para NIDs que siempre es abs)
   const valueFor = (region, kpi) => {
     const raw = sums[region][kpi.key];
     if (raw === undefined || raw === null) return null;
-    if (kpi.key === 'properties_total') return raw;
+    if (kpi.key === 'properties') return raw;
     if (kpi.norm === 'pct') {
-      const rev = sums[region]['gmv_total'] || 0;
+      const rev = sums[region]['gmv_inmobiliaria'] || 0;
       if (!rev) return null;
       return raw / rev;
     }
@@ -683,8 +681,8 @@ function renderCmp() {
   const revenueByRegion = {};
   const nidsByRegion = {};
   for (const r of [...regionesSel, 'Total']) {
-    revenueByRegion[r] = sums[r]['gmv_total'] || 0;
-    nidsByRegion[r] = sums[r]['properties_total'] || 0;
+    revenueByRegion[r] = sums[r]['gmv_inmobiliaria'] || 0;
+    nidsByRegion[r] = sums[r]['properties'] || 0;
   }
 
   const applyMetric = (val, region, row) => {
@@ -715,12 +713,12 @@ function renderCmp() {
   };
 
   // Cuando la métrica activa es 'abs', mostrar también el % del GMV debajo
-  // (mismo patrón que la tabla principal). Base = gmv_total (Inmobiliaria).
+  // (mismo patrón que la tabla principal). Base = gmv_inmobiliaria (Inmobiliaria).
   const showPctBelow = state.cmpMetrica === 'abs';
   const pctExcluded = new Set([
-    'properties_inmo100', 'properties_trad', 'properties_total',
-    'gmv_inmo100', 'gmv_trad', 'gmv_total', 'fee_hc100',
-    'avg_ticket', 'avg_commission', 'pct_fee_charged', 'pct_fee_paid',
+    'properties', 'gmv_inmobiliaria',
+    'avg_ticket', 'avg_commission',
+    'pct_fee_charged', 'pct_fee_paid', 'pct_cm_revenue', 'pct_cm_gmv',
   ]);
   const renderCellValue = (rawVal, val, row, region) => {
     if (val === null || val === undefined) return '—';
@@ -794,9 +792,8 @@ function openCmpDrill(row, region, meses) {
   const colIdx = facts.columnas.indexOf(row.key);
   if (colIdx < 0) return;
 
-  // Base de % por-NID = gmv del producto (gmv_inmo100 + gmv_trad).
-  const idx100 = facts.columnas.indexOf('gmv_inmo100');
-  const idxT = facts.columnas.indexOf('gmv_trad');
+  // Base de % por-NID = precio_venta (guardado en gmv_inmobiliaria).
+  const gmvIdx = facts.columnas.indexOf('gmv_inmobiliaria');
 
   const mesSet = new Set(meses);
   // agrupar por NID sumando el valor Y el GMV en todos los meses del período
@@ -813,8 +810,7 @@ function openCmpDrill(row, region, meses) {
     }
     const e = agg.get(key);
     e.valor += v;
-    if (idx100 >= 0) e.gmv += facts.valores[idx100][i];
-    if (idxT >= 0) e.gmv += facts.valores[idxT][i];
+    if (gmvIdx >= 0) e.gmv += facts.valores[gmvIdx][i];
     e.meses.push(facts.mes[i]);
   }
   const items = [...agg.values()].filter(x => x.valor !== 0);
