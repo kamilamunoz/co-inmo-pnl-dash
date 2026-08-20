@@ -47,9 +47,10 @@ SELECT
     -- precio
     precio_venta,
 
-    -- Revenue (comisión cobrada por Habi al cliente)
+    -- Revenue (comisión cobrada por Habi al cliente).
+    -- Nota (2026-08-20): la tabla dejó de exponer `comision_recibida_accounting`.
+    -- Ambas vistas ACC/Sintético colapsan a `comision_recibida` (cuadra 100% con PDF).
     comision_recibida,
-    comision_recibida_accounting,
     porcentaje_comision_recibida,
 
     -- Brokers externos

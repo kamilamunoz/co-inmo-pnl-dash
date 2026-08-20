@@ -163,9 +163,9 @@ def _line_values(df: pd.DataFrame, vista: str) -> dict[str, pd.Series]:
     lines["avg_ticket"] = gmv  # promedio ponderado en aggregate() por properties
 
     # Revenue = comisión cobrada.
-    # En Sintético usa `comision_recibida` (sin sufijo) — cuadra 100% con PDF interno.
-    # ACC usa `_accounting` (cifra contable pura, ligeramente distinta).
-    revenue = pick("comision_recibida", "comision_recibida_accounting")
+    # 2026-08-20: la tabla dejó de exponer `comision_recibida_accounting`; ambas
+    # vistas usan `comision_recibida` (cuadra 100% con PDF interno).
+    revenue = _num(df["comision_recibida"])
     lines["revenue"] = revenue
     lines["avg_commission"] = revenue
     # % fee charged / % fee paid / % CM ratios se calculan post-agregación.
