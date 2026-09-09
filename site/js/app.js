@@ -1,7 +1,7 @@
 // co-inmo-pnl-dash — frontend
 // Kamila mantiene sola. Vanilla JS, sin frameworks.
 
-const PASSWORD = 'p&L_Inm0*C0l*C12d4d';
+const PASSWORD = 'p+L_Inm0*C0l*C12d4d';
 const STORAGE_KEY = 'co-inmo-pnl-auth';
 
 // Webhook de Google Chat para reportar NIDs con signo raro a Jeff.
